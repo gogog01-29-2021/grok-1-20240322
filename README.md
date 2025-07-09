@@ -54,3 +54,36 @@ huggingface-cli download xai-org/grok-1 --repo-type model --include ckpt-0/* --l
 The code and associated Grok-1 weights in this release are licensed under the
 Apache 2.0 license. The license only applies to the source files in this
 repository and the model weights of Grok-1.
+
+## Synthetic facial-expression sanity task
+
+The script [`synthetic_face_text_task.py`](./synthetic_face_text_task.py) trains a
+tiny classifier that maps facial-action units to text labels. It does **not**
+use the Grok-1 model directly; instead it serves as a quick end-to-end check
+that facial embeddings can flow through JAX code.
+
+Run the test with synthetic data:
+
+```bash
+python synthetic_face_text_task.py --epochs 200
+```
+
+If you have a dataset saved as `data.npz` containing arrays `x` (AU vectors) and
+`y` (integer labels), point the script at it:
+
+```bash
+python synthetic_face_text_task.py --dataset data.npz --epochs 500
+```
+
+To create `data.npz` from your own video, first extract facial-action units with
+any tool such as [OpenFace](https://github.com/TadasBaltrusaitis/OpenFace). Save
+the resulting feature matrix as `x` and the corresponding labels as `y` using
+NumPy:
+
+```python
+np.savez("data.npz", x=feature_array, y=label_array)
+```
+
+The final accuracy printed by the script should be close to 1.0 on the toy data
+and will vary on real data. This provides a lightweight sanity check before you
+wire facial embeddings into larger models.

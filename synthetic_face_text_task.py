@@ -2,17 +2,21 @@
 
 This script trains a minimal classifier that maps facial expression features to
 text labels. It is meant as a quick check that the AU/embedding path is wired
-correctly before running expensive experiments.
+correctly before running expensive experiments. Optionally a ``.npz`` dataset
+with ``x`` (features) and ``y`` (integer labels) can be provided.
 """
 
 from __future__ import annotations
 
+import argparse
 import functools
 from dataclasses import dataclass
+from pathlib import Path
 from typing import Tuple
 
 import jax
 import jax.numpy as jnp
+import numpy as np
 
 
 def generate_dataset(num_samples: int = 100) -> Tuple[jnp.ndarray, jnp.ndarray]:
@@ -24,6 +28,12 @@ def generate_dataset(num_samples: int = 100) -> Tuple[jnp.ndarray, jnp.ndarray]:
     feats = jnp.tile(base, (reps, 1))
     labels = jnp.arange(4).repeat(reps)
     return feats, labels
+
+
+def load_np_dataset(path: Path) -> Tuple[jnp.ndarray, jnp.ndarray]:
+    """Load dataset from ``.npz`` containing ``x`` and ``y`` arrays."""
+    data = np.load(path)
+    return jnp.asarray(data["x"]), jnp.asarray(data["y"])
 
 
 @dataclass
@@ -60,16 +70,35 @@ def train_step(model: LinearModel, _unused, batch) -> Tuple[LinearModel, any]:
     return new_model, None, loss
 
 
-if __name__ == "__main__":
+def main() -> None:
+    parser = argparse.ArgumentParser(description=__doc__)
+    parser.add_argument(
+        "--dataset",
+        type=Path,
+        help="Path to .npz file with 'x' and 'y' arrays (facial features and labels)",
+    )
+    parser.add_argument("--epochs", type=int, default=200, help="training epochs")
+    parser.add_argument("--samples", type=int, default=100, help="synthetic sample count")
+    args = parser.parse_args()
+
     key = jax.random.PRNGKey(0)
-    x, y = generate_dataset(100)
+
+    if args.dataset:
+        x, y = load_np_dataset(args.dataset)
+    else:
+        x, y = generate_dataset(args.samples)
+
     model = init_model(key)
 
-    for step in range(200):
+    for step in range(args.epochs):
         model, _, loss = train_step(model, None, (x, y))
-        if step % 50 == 0:
+        if step % (args.epochs // 4 or 1) == 0:
             print(f"step {step} loss {loss:.4f}")
 
     preds = jnp.argmax(model(x), axis=-1)
     acc = jnp.mean((preds == y).astype(jnp.float32))
     print("final accuracy", float(acc))
+
+
+if __name__ == "__main__":
+    main()
